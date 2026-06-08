@@ -1,0 +1,60 @@
+baseURL = 'https://khomkrit.cc/' # ใส่โดเมนที่คุณเพิ่งคุยกันไว้ได้เลยครับ
+languageCode = 'en-us'
+title = 'Khomkrit | Cloud & Infrastructure Architect'
+theme = 'PaperMod'
+defaultContentLanguage = "en" # ให้ภาษาอังกฤษเป็นค่าเริ่มต้น
+defaultContentLanguageInSubdir = false # ไม่ต้องมี /en/ ต่อท้ายโดเมนหลัก
+
+[params]
+  env = 'production'
+  description = 'Senior Systems Engineer focusing on Rust, Kubernetes, and Scalable Architecture'
+  author = 'Khomkrit'
+  defaultTheme = 'auto'
+  ShowReadingTime = true
+  ShowShareButtons = false # ปิดปุ่มแชร์โซเชียลเพื่อความคลีน
+
+  # ตั้งค่า Profile Mode สำหรับหน้าแรก
+  [params.profileMode]
+    enabled = true
+  #   title = "Hello, I'm Khomkrit"
+  #   subtitle = "Staff Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure."
+  #   imageUrl = "<ลิงก์รูปโปรไฟล์ของคุณ>"
+  #   imageWidth = 150
+  #   imageHeight = 150
+
+
+
+    [languages]
+      # ตั้งค่าสำหรับภาษาอังกฤษ
+      [languages.en]
+        languageName = "English"
+        title = "Khomkrit | Cloud & Infrastructure Architect"
+        subtitle = "Staff Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure."
+        weight = 1
+        # เมนูสำหรับหน้าภาษาอังกฤษ
+        [[languages.en.menu.main]]
+          name = "Case Studies"
+          url = "/case-studies/"
+          weight = 1
+
+      # ตั้งค่าสำหรับภาษาไทย
+      [languages.th]
+        languageName = "ภาษาไทย"
+        title = "คมกริช | ผู้เชี่ยวชาญด้านระบบ Cloud และ Backend"
+        subtitle = "Staff Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure."
+        weight = 2
+        # เมนูสำหรับหน้าภาษาไทย
+        [[languages.th.menu.main]]
+          name = "ผลงาน"
+          url = "/th/case-studies/"
+          weight = 1
+    # เพิ่มปุ่ม Call-to-action
+    [[params.profileMode.buttons]]
+      name = "View Case Studies"
+      url = "/case-studies/"
+    [[params.profileMode.buttons]]
+      name = "Blogs"
+      url = "/blogs/"
+    [[params.profileMode.buttons]]
+      name = "LinkedIn"
+      url = "https://linkedin.com/in/yourprofile"
