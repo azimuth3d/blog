@@ -4,6 +4,9 @@ theme = 'PaperMod'
 defaultContentLanguage = "th"
 defaultContentLanguageInSubdir = false
 
+[caches]
+  [caches.images]
+    dir = ':cacheDir/images'
 [markup]
   [markup.highlight]
     codeFences = true
