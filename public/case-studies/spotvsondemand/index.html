@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="th" dir="auto" data-theme="auto">
+
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot &#43; On-Demand | Khomkrit | Cloud &amp; Infrastructure Architect</title>
+<meta name="keywords" content="">
+<meta name="description" content="
+Cloud Instance มีประเภทไหนบ้าง
+Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:
+
+
+On-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา
+
+
+Spot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ &lsquo;ยึดคืน&rsquo; (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ
+
+
+เราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?
+The Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน:
+
+On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD)
+Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs)
+
+Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot
+Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)">
+<meta name="author" content="Khomkrit">
+<link rel="canonical" href="http://localhost:1313/case-studies/spotvsondemand/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.8b904b6fa5a6fb2acf6f8413cc960cb8f5310b0a2349961c371813c364b34594.css" integrity="sha256-i5BLb6Wm&#43;yrPb4QTzJYMuPUxCwojSZYcNxgTw2SzRZQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="http://localhost:1313/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/favicon-32x32.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/apple-touch-icon.png">
+<link rel="mask-icon" href="http://localhost:1313/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="th" href="http://localhost:1313/case-studies/spotvsondemand/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="http://localhost:1313/case-studies/spotvsondemand/">
+  <meta property="og:site_name" content="Khomkrit | Cloud & Infrastructure Architect">
+  <meta property="og:title" content="จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot &#43; On-Demand">
+  <meta property="og:description" content="Cloud Instance มีประเภทไหนบ้าง Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:
+On-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา
+Spot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ ‘ยึดคืน’ (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ
+เราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?
+The Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน: On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD) Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs) Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="case-studies">
+    <meta property="article:published_time" content="2024-07-04T21:32:12+07:00">
+    <meta property="article:modified_time" content="2024-07-04T21:32:12+07:00">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot &#43; On-Demand">
+  <meta name="twitter:description" content="Cloud Instance มีประเภทไหนบ้าง Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:
+On-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา
+Spot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ ‘ยึดคืน’ (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ
+เราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?
+The Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน: On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD) Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs) Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Case-Studies",
+      "item": "http://localhost:1313/case-studies/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot + On-Demand",
+      "item": "http://localhost:1313/case-studies/spotvsondemand/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot + On-Demand",
+  "name": "จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot \u002b On-Demand",
+  "description": "\nCloud Instance มีประเภทไหนบ้าง Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:\nOn-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา\nSpot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ \u0026lsquo;ยึดคืน\u0026rsquo; (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ\nเราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?\nThe Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน: On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD) Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs) Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)\n",
+  "keywords": [
+    
+  ],
+  "articleBody": "\nCloud Instance มีประเภทไหนบ้าง Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:\nOn-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา\nSpot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ ‘ยึดคืน’ (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ\nเราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?\nThe Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน: On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD) Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs) Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)\nPod Disruption Budgets (PDB): การบังคับให้ K8s รู้ว่า “จะเตะ Pod ฉันออกไม่ว่า แต่ต้องเหลือ Pod รันอยู่อย่างน้อย X ตัวเสมอ”\n1 2 3 4 5 6 7 8 9 apiVersion: policy/v1 kind: PodDisruptionBudget metadata: name: api-worker-pdb spec: minAvailable: 50% selector: matchLabels: app: api-worker Deep Dive: ศิลปะแห่งการตายอย่างสงบ (Graceful Shutdown) เมื่อ Node กำลังจะถูกดึงคืน Cloud Provider มักจะส่งสัญญาณเตือน (Termination Notice) มาล่วงหน้าประมาณ 25-30 วินาที K8s จะจับสัญญาณนี้และเริ่มกระบวนการ Evict Pod\nการจัดการ SIGTERM: แอปพลิเคชันต้องถูกเขียนมาให้ดักจับ (Catch) สัญญาณ SIGTERM เมื่อได้รับปุ๊บ ต้องเลิกรับ Request ใหม่ทันที แต่ให้เวลาประมวลผล Request เก่าที่ค้างอยู่ให้เสร็จ แล้วค่อยคืน Memory (Exit 0)\npreStop Hook (The Safety Net): โชว์วิธียื้อเวลาและถอดตัวเองออกจาก Load Balancer หรือ Service Discovery เพื่อไม่ให้ Traffic ใหม่วิ่งเข้ามาหา Pod ที่กำลังจะตาย\n1 2 3 4 lifecycle: preStop: exec: command: [\"/bin/sh\", \"-c\", \"sleep 10 \u0026\u0026 nginx -s quit\"] การ sleep 10 ช่วยให้ Kube-proxy อัปเดต iptables และตัด IP ของ Pod นี้ออกจาก Endpoint ล่วงหน้า ป้องกันปัญหา 502 Bad Gateway\nZero-Downtime ด้วย Health Checks ที่แม่นยำ เมื่อ Pod บน Spot Node ตาย K8s จะต้องรีบสร้าง Pod ใหม่ขึ้นมาทดแทน (หรือย้ายไป On-Demand ถ้า Spot หมด)\nReadiness Probe: ต้องตั้งให้เป๊ะ เพื่อให้มั่นใจว่า Pod ใหม่พร้อมรับ Traffic จริงๆ ไม่ใช่แค่ Start Process ติด Liveness Probe: อย่าตั้งให้ Sensitive เกินไปจน Pod รีสตาร์ทตัวเองรัวๆ จังหวะที่โหลดหนัก Node Affinity \u0026 Tolerations (การกำหนดว่า Workload ควรจะทำงานอยู่บนไหนบ้าง) เราจะใช้ Node Affinity และ toleations เพื่อบังคับให้ Pod เลือกลง Spot Node ก่อน ถ้า Spot ไม่มี ค่อยไปลง On-Demand (Fallback)\n1 2 3 4 5 6 7 8 9 10 affinity: nodeAffinity: preferredDuringSchedulingIgnoredDuringExecution: - weight: 100 preference: matchExpressions: - key: cloud.google.com/gke-spot ### สำหรับ GCP operator: In values: - \"true\" บทสรุป: Trade-off ที่คุ้มค่า จากประสบการณ์ ปรับการใช้ Node pool ให้เหมาะสมกับ Workload นั้น สามารถลดค่าใช้จ่ายได้สูงมาก โดยเฉพาะระบบที่้มี Worker เป็น Stateless เป็นส่วนใหญ่ พวก concurrent job ต่างๆ\n“Infrastructure ที่ดี ไม่ใช่แค่การเขียนโค้ดเก่ง แต่คือการเข้าใจ Lifecycle ของระบบและจัดการความเสี่ยงได้อย่างสมบูรณ์แบบ”\n",
+  "wordCount" : "357",
+  "inLanguage": "th",
+  "datePublished": "2024-07-04T21:32:12+07:00",
+  "dateModified": "2024-07-04T21:32:12+07:00",
+  "author":{
+    "@type": "Person",
+    "name": "Khomkrit"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "http://localhost:1313/case-studies/spotvsondemand/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Khomkrit | Cloud \u0026 Infrastructure Architect",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "http://localhost:1313/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="header-nav">
+        <div class="logo">
+            <a href="http://localhost:1313/" accesskey="h" title="Khomkrit.cc (Alt + H)">Khomkrit.cc</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" class="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg class="moon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg class="sun" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button><span class="nav-sep">|</span>
+                    <ul class="lang-menu">
+                        <li>
+                            <a href="http://localhost:1313/en/" title="English"
+                                aria-label="English">En</a>
+                        </li>
+                    </ul>
+            </div>
+        </div>
+        <ul id="menu" class="menu">
+            <li>
+                <a href="http://localhost:1313/case-studies/" title="Case Studies">
+                    <span>Case Studies</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      จ่ายแพงกว่าทำไม? เจาะลึกวิธีรัน Production บน K8s ด้วย Spot &#43; On-Demand
+    </h1>
+    <div class="post-meta">
+
+<span title='2024-07-04 21:32:12 +0700 +07'>4 กรกฎาคม G 2024</span>&nbsp;·&nbsp;<span>2 นาที</span>&nbsp;·&nbsp;<span>Khomkrit</span>
+
+</div>
+  </header> 
+  <div class="post-content md-content"><p><img alt="Cloud Instance " loading="lazy" src="/images/spotvsondemand.png"></p>
+<h3 id="cloud-instance-มประเภทไหนบาง">Cloud Instance มีประเภทไหนบ้าง<a hidden class="anchor" aria-hidden="true" href="#cloud-instance-มประเภทไหนบาง">#</a></h3>
+<p>Cloud Instance ภายใน Cloud Provider ชั้นนำอย่าง AWS, GCP หรือ Azure สามารถแบ่งประเภทการใช้งานหลักๆ ได้เป็น 2 รูปแบบ เพื่อตอบโจทย์ทั้งด้านความเสถียรและต้นทุน:</p>
+<ul>
+<li>
+<p>On-Demand Instance: เป็นรูปแบบการใช้งานมาตรฐานที่เราเช่าใช้แบบรายชั่วโมงหรือรายวินาที ให้ความมั่นใจในด้าน Availability สูงสุด (24/7) เหมาะสำหรับ Workload ที่ต้องการความเสถียรและรันต่อเนื่องตลอดเวลา</p>
+</li>
+<li>
+<p>Spot Instance: ทางเลือกสำหรับสาย Optimized Cost ที่สามารถลดค่าใช้จ่ายได้ถึง 60 - 80% จากราคา On-Demand! แต่มาพร้อมกับข้อตกลงสำคัญคือ Cloud Provider มีสิทธิ์ &lsquo;ยึดคืน&rsquo; (Preempt) Instance ของเราได้ตลอดเวลา หากระบบต้องการ Capacity ไปใช้ในส่วนอื่น ซึ่งหมายความว่าแอปพลิเคชันของเราต้องถูกออกแบบมาให้รองรับการหยุดทำงานหรือการย้าย Node ได้โดยไม่กระทบต่อภาพรวมระบบ</p>
+</li>
+</ul>
+<p>เราควรจัดการ Workload แบบไหนดีให้เหมาะสมที่สุด ?</p>
+<h3 id="the-golden-ratio-เลาถงสถาปตยกรรมทแบง-node-pool-เปน-2-สวน">The Golden Ratio: เล่าถึงสถาปัตยกรรมที่แบ่ง Node Pool เป็น 2 ส่วน:<a hidden class="anchor" aria-hidden="true" href="#the-golden-ratio-เลาถงสถาปตยกรรมทแบง-node-pool-เปน-2-สวน">#</a></h3>
+<ul>
+<li>On-Demand Pool: สำหรับ Core Services ที่ห้ามตายเด็ดขาด (เช่น APISIX Ingress, Database, StatefulSet, ETCD)</li>
+<li>Spot Pool: สำหรับ Stateless Workloads(เช่น API Workers, AI Inference API, Background Jobs)</li>
+</ul>
+<h3 id="prerequisites-สงทตองเตรยมตวกอนยาย-workload-ลง-spot">Prerequisites: สิ่งที่ต้องเตรียมตัวก่อนย้าย Workload ลง Spot<a hidden class="anchor" aria-hidden="true" href="#prerequisites-สงทตองเตรยมตวกอนยาย-workload-ลง-spot">#</a></h3>
+<p>Stateless by Design: แอปพลิเคชันต้องไม่เก็บ State ไว้ใน Memory หรือ Local Disk หากถูกเตะออกกลางคัน State ต้องยังอยู่ใน Database (เช่น ScyllaDB หรือ Redis)</p>
+<p>Pod Disruption Budgets (PDB): การบังคับให้ K8s รู้ว่า &ldquo;จะเตะ Pod ฉันออกไม่ว่า แต่ต้องเหลือ Pod รันอยู่อย่างน้อย X ตัวเสมอ&rdquo;</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l">policy/v1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">PodDisruptionBudget</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">api-worker-pdb</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">minAvailable</span><span class="p">:</span><span class="w"> </span><span class="m">50</span><span class="l">%</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l">api-worker</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="deep-dive-ศลปะแหงการตายอยางสงบ-graceful-shutdown">Deep Dive: ศิลปะแห่งการตายอย่างสงบ (Graceful Shutdown)<a hidden class="anchor" aria-hidden="true" href="#deep-dive-ศลปะแหงการตายอยางสงบ-graceful-shutdown">#</a></h3>
+<p>เมื่อ Node กำลังจะถูกดึงคืน Cloud Provider มักจะส่งสัญญาณเตือน (Termination Notice) มาล่วงหน้าประมาณ 25-30 วินาที K8s จะจับสัญญาณนี้และเริ่มกระบวนการ Evict Pod</p>
+<p>การจัดการ SIGTERM: แอปพลิเคชันต้องถูกเขียนมาให้ดักจับ (Catch) สัญญาณ SIGTERM เมื่อได้รับปุ๊บ ต้องเลิกรับ Request ใหม่ทันที แต่ให้เวลาประมวลผล Request เก่าที่ค้างอยู่ให้เสร็จ แล้วค่อยคืน Memory (Exit 0)</p>
+<p>preStop Hook (The Safety Net): โชว์วิธียื้อเวลาและถอดตัวเองออกจาก Load Balancer หรือ Service Discovery เพื่อไม่ให้ Traffic ใหม่วิ่งเข้ามาหา Pod ที่กำลังจะตาย</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">lifecycle</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">preStop</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">exec</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&#34;/bin/sh&#34;</span><span class="p">,</span><span class="w"> </span><span class="s2">&#34;-c&#34;</span><span class="p">,</span><span class="w"> </span><span class="s2">&#34;sleep 10 &amp;&amp; nginx -s quit&#34;</span><span class="p">]</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>การ sleep 10 ช่วยให้ Kube-proxy อัปเดต iptables และตัด IP ของ Pod นี้ออกจาก Endpoint ล่วงหน้า ป้องกันปัญหา 502 Bad Gateway</p>
+<h3 id="zero-downtime-ดวย-health-checks-ทแมนยำ">Zero-Downtime ด้วย Health Checks ที่แม่นยำ<a hidden class="anchor" aria-hidden="true" href="#zero-downtime-ดวย-health-checks-ทแมนยำ">#</a></h3>
+<p>เมื่อ Pod บน Spot Node ตาย K8s จะต้องรีบสร้าง Pod ใหม่ขึ้นมาทดแทน (หรือย้ายไป On-Demand ถ้า Spot หมด)</p>
+<ul>
+<li>Readiness Probe: ต้องตั้งให้เป๊ะ เพื่อให้มั่นใจว่า Pod ใหม่พร้อมรับ Traffic จริงๆ ไม่ใช่แค่ Start Process ติด</li>
+<li>Liveness Probe: อย่าตั้งให้ Sensitive เกินไปจน Pod รีสตาร์ทตัวเองรัวๆ จังหวะที่โหลดหนัก</li>
+</ul>
+<h3 id="node-affinity--tolerations-การกำหนดวา-workload-ควรจะทำงานอยบนไหนบาง">Node Affinity &amp; Tolerations (การกำหนดว่า Workload ควรจะทำงานอยู่บนไหนบ้าง)<a hidden class="anchor" aria-hidden="true" href="#node-affinity--tolerations-การกำหนดวา-workload-ควรจะทำงานอยบนไหนบาง">#</a></h3>
+<p>เราจะใช้ Node Affinity  และ toleations เพื่อบังคับให้ Pod เลือกลง Spot Node ก่อน ถ้า Spot ไม่มี ค่อยไปลง On-Demand (Fallback)</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">affinity</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">nodeAffinity</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">preferredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span>- <span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="m">100</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">preference</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">matchExpressions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span>- <span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l">cloud.google.com/gke-spot  </span><span class="w"> </span><span class="c">### สำหรับ  GCP  </span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l">In</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span>- <span class="s2">&#34;true&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="บทสรป-trade-off-ทคมคา">บทสรุป: Trade-off ที่คุ้มค่า<a hidden class="anchor" aria-hidden="true" href="#บทสรป-trade-off-ทคมคา">#</a></h3>
+<p>จากประสบการณ์ ปรับการใช้  Node pool ให้เหมาะสมกับ Workload นั้น สามารถลดค่าใช้จ่ายได้สูงมาก โดยเฉพาะระบบที่้มี Worker เป็น Stateless เป็นส่วนใหญ่ พวก concurrent job ต่างๆ</p>
+<p>&ldquo;Infrastructure ที่ดี ไม่ใช่แค่การเขียนโค้ดเก่ง แต่คือการเข้าใจ Lifecycle ของระบบและจัดการความเสี่ยงได้อย่างสมบูรณ์แบบ&rdquo;</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="http://localhost:1313/">Khomkrit | Cloud &amp; Infrastructure Architect</a></span> · 
+
+    
+    
+    <span>
+        Powered by
+        <a href="https://gohugo.io/?utm_source=papermod" rel="noopener" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" id="top-link" class="top-link hidden" aria-label="go to top" title="Go to Top (Alt + G)" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevrons-up">
+        <polyline points="17 11 12 6 7 11"></polyline>
+        <polyline points="17 18 12 13 7 18"></polyline>
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var toplink = document.getElementById("top-link");
+    window.onscroll = function () {
+        const scrollThreshold = window.innerHeight;
+        if (document.body.scrollTop > scrollThreshold || document.documentElement.scrollTop > scrollThreshold) {
+            toplink.classList.remove("hidden");
+        } else {
+            toplink.classList.add("hidden");
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

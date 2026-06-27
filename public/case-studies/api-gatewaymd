@@ -1,0 +1,10 @@
+---
+title: "การวางสถาปัตยกรรม API Gateway สำหรับระบบ Enterprise IoT"
+date: 2026-06-08T21:00:00+07:00
+url: "/th/case-studies/api-gateway-th/"
+cover:
+  alt: "API Gateway Architecture Diagram" # ข้อความอธิบายรูปสำหรับ SEO
+  hidden: false
+---
+![API Gateway Architecture](/images/gateway-scalable.png)
+ระบบ Enterprise IoT จำเป็นต้องรองรับข้อมูลมหาศาลพร้อมกัน...
