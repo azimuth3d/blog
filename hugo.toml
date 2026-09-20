@@ -1,100 +1,150 @@
 baseURL = 'https://khomkrit.cc/'
-languageCode = 'en-us'
 theme = 'PaperMod'
-defaultContentLanguage = "th"
-defaultContentLanguageInSubdir = false
 
+# ==========================================================
+# Multilingual
+# Thai = default language
+# ==========================================================
+defaultContentLanguage = 'th'
+defaultContentLanguageInSubdir = false
+disableDefaultLanguageRedirect = false
+
+# ==========================================================
+# Cache
+# ==========================================================
 [caches]
   [caches.images]
     dir = ':cacheDir/images'
+
+# ==========================================================
+# Markup / Syntax Highlighting
+# ==========================================================
 [markup]
   [markup.highlight]
     codeFences = true
     guessSyntax = false
-    lineNos = true        # ปรับเป็น true ถ้าอยากให้มี "เลขบรรทัด" โชว์ด้านหน้าโค้ด
-    style = "dracula"
-    noClasses = false  # <--- บรรทัดนี้สำคัญมาก! บังคับให้ Hugo ใช้ CSS Class แทนการฝังสีลงไปดื้อๆ"     # <--- เปลี่ยนชื่อธีมสีตรงนี้ครับ
-# ==========================================
-# 1. การตั้งค่า Params พื้นฐาน (ใช้ร่วมกันทุกภาษา)
-# ==========================================
+    lineNos = true
+    style = 'dracula'
+    noClasses = false
+
+# ==========================================================
+# Global Params
+# ==========================================================
 [params]
   env = 'production'
-  description = 'Senior Systems Engineer focusing on Rust, Kubernetes, and Scalable Architecture'
   author = 'Khomkrit'
+
   defaultTheme = 'auto'
   ShowReadingTime = true
   ShowShareButtons = false
 
-[params.cover]
+  # PaperMod multilingual language selector
+  # Show "ไทย" / "English" instead of just "th" / "en"
+  displayFullLangName = true
+
+  [params.cover]
     hidden = false
-    hiddenInList = false    # ซ่อนรูปในหน้ารวมบทความ (เพื่อให้ดูคลีน)
-    hiddenInSingle = false# โชว์รูประดับบนสุดในหน้าอ่านบทความ
+    hiddenInList = false
+    hiddenInSingle = false
 
-[params.label]
-    text = "Khomkrit.cc"
+  [params.label]
+    text = 'Khomkrit.cc'
 
-  # --- ตั้งค่าส่วนกลางของ Profile Mode (รูปและปุ่มกด) ---
   [params.profileMode]
     enabled = true
-    # imageUrl = "<ลิงก์รูปโปรไฟล์ของคุณ>"
-    # imageWidth = 150
-    # imageHeight = 150
 
+# ==========================================================
+# Thai
+# ==========================================================
+[languages.th]
+  languageCode = 'th-TH'
+  languageName = 'ไทย'
+  label = 'ไทย'
+  locale = 'th-TH'
+  weight = 1
 
+  title = 'Khomkrit | Cloud & Infrastructure Architect'
 
-# ==========================================
-# 2. การตั้งค่าแยกตามภาษา (Multilingual)
-# ==========================================
-[languages]
+  [languages.th.params]
+    description = 'Senior Systems Engineer specializing in Cloud Infrastructure, Kubernetes, DevOps, AI Infrastructure, and scalable distributed systems.'
 
-  # ---------------- ภาษาอังกฤษ (Default) ----------------
-  [languages.en]
-    languageName = "English"
-    title = "Khomkrit | Cloud & Infrastructure Architect" # Title บนแท็บ Browser
-    weight = 1
+  [languages.th.params.profileMode]
+    title = 'Khomkrit | Cloud & Infrastructure Architect'
+    subtitle = 'Fullstack Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure.'
 
-    # ข้อความตรงกลางหน้าจอสำหรับภาษาอังกฤษ
-    [languages.en.params.profileMode]
-      title = "Khomkrit | Cloud & Infrastructure Architect"
-      subtitle = "Staff Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure."
+    [[languages.th.params.profileMode.buttons]]
+      name = 'Case Studies'
+      url = '/case-studies/'
 
-    [[languages.en.menu.main]]
-      name = "Case Studies"
-      url = "/case-studies/"
+    [[languages.th.params.profileMode.buttons]]
+      name = 'Blogs'
+      url = '/blogs/'
+
+    [[languages.th.params.profileMode.buttons]]
+      name = 'GitHub'
+      url = 'https://github.com/azimuth3d'
+
+  # --------------------------------------------------------
+  # Thai Main Menu
+  # --------------------------------------------------------
+  [languages.th.menus]
+
+    [[languages.th.menus.main]]
+      identifier = 'case-studies'
+      name = 'Case Studies'
+      pageRef = '/case-studies'
       weight = 1
 
-    [[languages.en.params.profileMode.buttons]]
-        name = "View Case Studies"
-        url = "/case-studies/"
-    [[languages.en.params.profileMode.buttons]]
-        name = "Blogs"
-        url = "/blogs/"
-    [[languages.en.params.profileMode.buttons]]
-        name = "Github"
-        url = "https://github.com/azimuth3d"
+    [[languages.th.menus.main]]
+      identifier = 'blogs'
+      name = 'Blogs'
+      pageRef = '/blogs'
+      weight = 2
 
-  # ---------------- ภาษาไทย ----------------
-  [languages.th]
-    languageName = "Thai"
-    title = "Khomkrit | Cloud & Infrastructure Architect" # Title บนแท็บ Browser
-    weight = 1
+# ==========================================================
+# English
+# ==========================================================
+[languages.en]
+  languageCode = 'en-US'
+  languageName = 'English'
+  label = 'English'
+  locale = 'en-US'
+  weight = 2
 
-    # ข้อความตรงกลางหน้าจอสำหรับภาษาอังกฤษ
-    [languages.th.params.profileMode]
-      title = "Khomkrit | Cloud & Infrastructure Architect"
-      subtitle = "Fullstack Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure."
+  title = 'Khomkrit | Cloud & Infrastructure Architect'
 
-      [[languages.th.menu.main]]
-      name = "Case Studies"
-      url = "/case-studies/"
+  [languages.en.params]
+    description = 'Senior Systems Engineer specializing in Cloud Infrastructure, Kubernetes, DevOps, AI Infrastructure, and scalable distributed systems.'
+
+  [languages.en.params.profileMode]
+    title = 'Khomkrit | Cloud & Infrastructure Architect'
+    subtitle = 'Staff Engineer / Consultant specializing in high-performance Backend and Enterprise Infrastructure.'
+
+    [[languages.en.params.profileMode.buttons]]
+      name = 'View Case Studies'
+      url = '/en/case-studies/'
+
+    [[languages.en.params.profileMode.buttons]]
+      name = 'Blogs'
+      url = '/en/blogs/'
+
+    [[languages.en.params.profileMode.buttons]]
+      name = 'GitHub'
+      url = 'https://github.com/azimuth3d'
+
+  # --------------------------------------------------------
+  # English Main Menu
+  # --------------------------------------------------------
+  [languages.en.menus]
+
+    [[languages.en.menus.main]]
+      identifier = 'case-studies'
+      name = 'Case Studies'
+      pageRef = '/case-studies'
       weight = 1
 
-    [[languages.th.params.profileMode.buttons]]
-          name = "View Case Studies"
-          url = "/case-studies/"
-    [[languages.th.params.profileMode.buttons]]
-          name = "Blogs"
-          url = "/blogs/"
-    [[languages.th.params.profileMode.buttons]]
-          name = "Github"
-          url = "https://github.com/azimuth3d"
+    [[languages.en.menus.main]]
+      identifier = 'blogs'
+      name = 'Blogs'
+      pageRef = '/blogs'
+      weight = 2

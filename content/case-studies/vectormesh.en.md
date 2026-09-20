@@ -1,8 +1,8 @@
 +++
 date = '2026-05-12T12:05:22+07:00'
 draft = false
-title = 'VectorMesh – ออกแบบระบบ Enterprise AI-RAG ที่รองรับ High Traffic และ Secure by Design'
-language = 'th'
+title = 'VectorMesh – Designing a High-Traffic, Secure-by-Design Enterprise AI-RAG Platform'
+language = 'en'
 +++
 
 ![Vector Mesh overview architecture](/images/279eff97-0663-4c9d-aaac-352125cbc4c6.jpeg)
